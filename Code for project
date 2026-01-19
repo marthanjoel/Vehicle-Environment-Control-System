@@ -1,0 +1,93 @@
+#include <DHT.h>
+
+// ===== Pins =====
+#define DHTPIN 2
+#define DHTTYPE DHT11
+DHT dht(DHTPIN, DHTTYPE);
+
+const int flamePin = 3;
+const int engineTempPin = A0;
+const int buzzer = 7;
+const int redPin = 9;
+const int greenPin = 10;
+const int bluePin = 11; // not used
+const int relayPin = 8; // HVAC/window simulation
+
+// ===== Thresholds =====
+const float engineTempThresholdC = 50.0;
+const float humidityThreshold = 70.0; // only display alert
+
+void setup() {
+  Serial.begin(9600);
+  dht.begin();
+
+  pinMode(flamePin, INPUT);
+  pinMode(buzzer, OUTPUT);
+  pinMode(redPin, OUTPUT);
+  pinMode(greenPin, OUTPUT);
+  pinMode(bluePin, OUTPUT);
+  pinMode(relayPin, OUTPUT);
+
+  setRGB(0, 255, 0); // Green = safe
+  digitalWrite(relayPin, LOW); // Relay off at start
+
+  Serial.println("===============================================");
+  Serial.println("      VEHICLE ENVIRONMENT CONTROL SYSTEM      ");
+  Serial.println("===============================================");
+  Serial.println("Cabin Temp | Humidity | Flame | Engine Temp | Status");
+  Serial.println("------------------------------------------------------");
+}
+
+void loop() {
+  // ---- Read sensors ----
+  float cabinTemp = dht.readTemperature();
+  float cabinHum = dht.readHumidity();
+  int flame = digitalRead(flamePin);
+  float engineTempC = analogRead(engineTempPin) * 5.0 / 1023.0 * 100.0;
+
+  // ---- Determine status ----
+  bool alert = false;
+  String status = "";
+
+  if (flame == HIGH) {
+    status += "FIRE!";
+    alert = true;
+  }
+  if (engineTempC > engineTempThresholdC) {
+    if (status.length() > 0) status += " & ";
+    status += "OVERHEATING!";
+    alert = true;
+  }
+  if (cabinHum > humidityThreshold) {
+    if (status.length() > 0) status += " & ";
+    status += "HIGH HUMIDITY!";
+  }
+  if (!alert && status == "") status = "System Safe";
+
+  // ---- LED + Buzzer ----
+  if (alert) {
+    digitalWrite(buzzer, HIGH);
+    setRGB(255, 0, 0); // Red
+    digitalWrite(relayPin, HIGH); // Relay ON
+  } else {
+    digitalWrite(buzzer, LOW);
+    setRGB(0, 255, 0); // Green
+    digitalWrite(relayPin, LOW); // Relay OFF
+  }
+
+  // ---- Print Serial Table ----
+  Serial.print(cabinTemp, 1); Serial.print(" C\t | ");
+  Serial.print(cabinHum, 1); Serial.print(" %\t | ");
+  Serial.print(flame); Serial.print("\t | ");
+  Serial.print(engineTempC, 1); Serial.print(" C\t | ");
+  Serial.println(status);
+
+  delay(2000);
+}
+
+// ---- Function to set RGB ----
+void setRGB(int r, int g, int b){
+  analogWrite(redPin, r);
+  analogWrite(greenPin, g);
+  analogWrite(bluePin, b);
+}
